@@ -1,0 +1,43 @@
+{
+  "name": "unfix",
+  "version": "0.1.0",
+  "description": "Un-fix bugs you already fixed, then see which AI coding agent fixes them again. A private benchmark built from your own git history.",
+  "type": "module",
+  "bin": {
+    "unfix": "dist/src/cli.js"
+  },
+  "files": [
+    "dist/src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node --test dist/test/*.test.js",
+    "prepublishOnly": "npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "benchmark",
+    "eval",
+    "claude-code",
+    "codex",
+    "aider",
+    "swe-bench",
+    "git",
+    "cli"
+  ],
+  "author": "El7ajb",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/El7ajb/unfix.git"
+  },
+  "homepage": "https://github.com/El7ajb/unfix#readme"
+}
