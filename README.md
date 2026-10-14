@@ -6,8 +6,8 @@
 
 A private benchmark for coding agents, mined from your own git history. One command, no account, nothing uploaded.
 
-[![npm](https://img.shields.io/npm/v/unfix?color=cb3837&logo=npm)](https://www.npmjs.com/package/unfix)
-[![CI](https://img.shields.io/github/actions/workflow/status/El7ajb/unfix/ci.yml?logo=github&label=tests)](https://github.com/El7ajb/unfix/actions)
+[![npm](https://img.shields.io/npm/v/unfix-ai?color=cb3837&logo=npm)](https://www.npmjs.com/package/unfix-ai)
+[![CI](https://img.shields.io/github/actions/workflow/status/jubyuhanna-create/unfix/ci.yml?logo=github&label=tests)](https://github.com/jubyuhanna-create/unfix/actions)
 [![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -69,7 +69,7 @@ git history ─► mine ─► validate ─► .unfix/tasks/*.json
 Requires Node 20+, git, and macOS, Linux or WSL.
 
 ```bash
-npm i -g unfix          # or prefix every command with: npx unfix
+npm i -g unfix-ai       # or without installing: npx unfix-ai <command>
 
 cd your-repo
 unfix mine              # find candidate bug fixes from the last year
@@ -177,7 +177,7 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - run: npm i -g unfix @anthropic-ai/claude-code
+      - run: npm i -g unfix-ai @anthropic-ai/claude-code
       - run: git fetch origin main && git show origin/main:AGENTS.md > /tmp/AGENTS.main.md
       - run: unfix run --agent claude-code --limit 10 --instructions /tmp/AGENTS.main.md --label main
       - run: unfix run --agent claude-code --limit 10 --instructions AGENTS.md --label pr
@@ -211,7 +211,7 @@ jobs:
 `unfix` has zero runtime dependencies and is small enough to read in an evening. Start with [CONTRIBUTING.md](CONTRIBUTING.md); issues labelled `good first issue` are a good way in.
 
 ```bash
-git clone https://github.com/El7ajb/unfix && cd unfix
+git clone https://github.com/jubyuhanna-create/unfix && cd unfix
 npm install
 npm test
 ```
