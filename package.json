@@ -1,6 +1,6 @@
 {
   "name": "unfix-ai",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Un-fix bugs you already fixed, then see which AI coding agent fixes them again. A private benchmark built from your own git history.",
   "type": "module",
   "bin": {

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { invocation, parseCost, prompt, type AgentSpec } from "./agents.js";
+import { agentError, invocation, parseCost, prompt, type AgentSpec } from "./agents.js";
 import { git } from "./git.js";
 import type { Config } from "./project.js";
 import { BASE_TAG, Sandbox } from "./sandbox.js";
@@ -17,6 +17,9 @@ export interface TaskResult {
   agentExit: number;
   timedOut: boolean;
   error?: string;
+  // The agent never really ran (not logged in, not installed, crashed on start).
+  // These aren't attempts, so they don't count toward the solve rate.
+  agentFailed?: boolean;
 }
 
 export interface RunFile {
@@ -94,20 +97,24 @@ async function runTask(root: string, task: Task, cfg: Config, opts: RunOptions):
     log.push(`--- files changed ---\n${touched.join("\n") || "(none)"}`);
     log.push(`--- diff ---\n${box.git(["diff", "--cached", BASE_TAG])}`);
 
-    box.resetTestsAndApplyFix();
-    const tests = await box.runTests(opts.testTimeoutMs);
-    log.push(`--- tests (exit ${tests.code}) ---\n${tests.out}`);
-
-    return {
+    const result = {
       ...base,
-      solved: tests.code === 0,
       seconds: Math.round(agent.ms / 1000),
       costUsd: parseCost(opts.agent, agent.out),
       filesChanged: touched.filter((f) => !task.testFiles.includes(f)).length,
       agentExit: agent.code,
       timedOut: agent.timedOut,
-      error: agent.code === 127 ? `couldn't start ${opts.agent}, is it installed?` : undefined,
     };
+    const error = agent.timedOut ? undefined : agentError(opts.agent, agent.code, agent.out, touched.length > 0);
+    if (error) {
+      log.push(`--- not graded: ${error} ---`);
+      return { ...result, error, agentFailed: true };
+    }
+
+    box.resetTestsAndApplyFix();
+    const tests = await box.runTests(opts.testTimeoutMs);
+    log.push(`--- tests (exit ${tests.code}) ---\n${tests.out}`);
+    return { ...result, solved: tests.code === 0 };
   } catch (e: any) {
     log.push(String(e.stderr ?? e.stack ?? e));
     return { ...base, error: String(e.message).split("\n")[0] };
@@ -138,11 +145,20 @@ export async function run(root: string, tasks: Task[], cfg: Config, opts: RunOpt
   const save = () => writeFileSync(runPath(root, opts.label), JSON.stringify(file, null, 2) + "\n");
   save();
 
+  // If the agent can't even start, every task will fail the same way. Stop after
+  // two in a row instead of burning through the whole list.
+  let ranOnce = false;
+  let failures = 0;
+  let aborted: string | undefined;
   await pool(tasks, opts.parallel, async (t) => {
+    if (aborted) return;
     const r = await runTask(root, t, cfg, opts);
+    if (aborted) return;
     file.results.push(r);
     save();
     onDone(r);
+    if (!r.agentFailed) ranOnce = true;
+    else if (!ranOnce && ++failures >= Math.min(2, tasks.length)) aborted = r.error;
   });
-  return file;
+  return { file, aborted };
 }

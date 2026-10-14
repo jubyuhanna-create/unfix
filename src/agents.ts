@@ -59,9 +59,33 @@ export function invocation(spec: AgentSpec, problem: string, problemFile: string
   }
 }
 
+function claudeResult(out: string): any {
+  const line = out.trim().split("\n").reverse().find((l) => l.startsWith("{") && l.includes('"type":"result"'));
+  try {
+    return line ? JSON.parse(line) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // Claude Code's JSON output reports what the run cost. Others don't, so we just leave it empty.
 export function parseCost(agent: string, out: string): number | undefined {
   if (agent !== "claude-code") return undefined;
-  const m = out.match(/"total_cost_usd"\s*:\s*([\d.]+)/);
-  return m ? Number(m[1]) : undefined;
+  const cost = claudeResult(out)?.total_cost_usd ?? out.match(/"total_cost_usd"\s*:\s*([\d.]+)/)?.[1];
+  return cost == null ? undefined : Number(cost);
+}
+
+// Tells "the agent tried and got it wrong" apart from "the agent never ran".
+// Only the second is an error; it shouldn't be counted as a failed attempt.
+export function agentError(agent: string, code: number, out: string, changedSomething: boolean): string | undefined {
+  if (code === 127) return `couldn't start ${agent}. Is it installed and on your PATH?`;
+  if (agent === "claude-code") {
+    const r = claudeResult(out);
+    if (r?.is_error) return `claude-code: ${String(r.result ?? r.terminal_reason ?? "error").replace(/\s+/g, " ").slice(0, 200)}`;
+  }
+  if (code !== 0 && !changedSomething) {
+    const last = out.trim().split("\n").filter(Boolean).pop() ?? "";
+    return `${agent} exited with code ${code} without changing anything${last ? `: ${last.slice(0, 160)}` : ""}`;
+  }
+  return undefined;
 }

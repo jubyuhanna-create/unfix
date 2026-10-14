@@ -109,7 +109,8 @@ async function main(argv: string[]) {
       const cfg = loadConfig(root);
       const tasks = loadTasks(root).filter((t) => values.all || t.status === "new");
       if (!tasks.length) return void console.log("Nothing to validate. Run `unfix mine` first, or pass --all to recheck.");
-      console.log(c.dim(`setup: ${cfg.setup ?? "(none)"}\ntests: ${cfg.test}\n`));
+      console.log(c.dim(`setup: ${cfg.setup ?? "(none)"}\ntests: ${cfg.test}`));
+      console.log(c.dim(`checking ${tasks.length} task(s); the first ones are slow while dependencies install...\n`));
       const done = await validate(root, tasks, cfg, {
         parallel: int(values.parallel, 2, "parallel"),
         timeoutMs: parseTime(values.timeout, 10 * 6e4),
@@ -160,9 +161,9 @@ async function main(argv: string[]) {
 
       const label = values.label ?? [values.agent, values.model].filter(Boolean).join("-").replace(/[^\w.-]+/g, "_");
       ensureGitignore(root);
-      console.log(c.dim(`${tasks.length} task(s) → ${label}\n`));
+      console.log(c.dim(`${tasks.length} task(s) → ${label}. Each one waits for the agent, so this takes a while.\n`));
       const started = Date.now();
-      const file = await run(root, tasks, cfg, {
+      const { file, aborted } = await run(root, tasks, cfg, {
         agent: values.agent,
         model: values.model,
         cmd: values.cmd,
@@ -172,7 +173,16 @@ async function main(argv: string[]) {
         agentTimeoutMs: parseTime(values.timeout, 20 * 6e4),
         testTimeoutMs: parseTime(values["test-timeout"], 10 * 6e4),
         keep: values.keep,
-      }, (r) => console.log(`  ${r.solved ? c.green("✓") : c.red("✗")} ${r.id}  ${c.dim(duration(r.seconds * 1000) + (r.error ? `  ${r.error}` : ""))}`));
+      }, (r) => {
+        const mark = r.agentFailed ? c.yellow("!") : r.solved ? c.green("✓") : c.red("✗");
+        console.log(`  ${mark} ${r.id}  ${c.dim(duration(r.seconds * 1000))}${r.error ? "  " + c.yellow(r.error) : ""}`);
+      });
+      if (aborted) {
+        console.error(`\n${c.red("stopped:")} the agent didn't run.\n  ${aborted}`);
+        console.error(c.dim(`Fix that, then run the same command again. Details in .unfix/runs/${label}/`));
+        process.exitCode = 1;
+        return;
+      }
       process.stdout.write(report(file));
       console.log(c.dim(`\ndone in ${duration(Date.now() - started)}. Logs in .unfix/runs/${label}/`));
       return;

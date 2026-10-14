@@ -55,6 +55,12 @@ function agents() {
   // and prints JSON with a cost like the real one does.
   const fake = script("fake-claude.mjs", `
     const prompt = fs.readFileSync(0, "utf8");
+    if (process.env.FAKE_CLAUDE === "expired") {
+      // What the real CLI printed when this happened on a user's machine.
+      console.log(JSON.stringify({ type: "result", is_error: true, total_cost_usd: 0, terminal_reason: "api_error",
+        result: "Anthropic profile login expired · Run /login to use your claude.ai account instead" }));
+      process.exit(1);
+    }
     if (!prompt.includes("add subtracts")) { console.error("no prompt on stdin"); process.exit(3); }
     ${fix}
     console.log(JSON.stringify({ type: "result", total_cost_usd: 0.42 }));`);
@@ -120,6 +126,43 @@ test("--agent claude-code gets the prompt on stdin and reports cost", () => {
     const [r] = results(dir, "cc");
     assert.equal(r.solved, true, JSON.stringify(r));
     assert.equal(r.costUsd, 0.42);
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
+    rmSync(a.dir, { recursive: true, force: true, maxRetries: 5 });
+  }
+});
+
+test("an agent that can't log in is reported, not scored as 0%", () => {
+  const dir = repo();
+  const a = agents();
+  try {
+    // Two fixes so there are two tasks: the run should stop after both fail to start.
+    writeFileSync(join(dir, "src/sub.js"), "export const sub = (a, b) => a + b;\n");
+    writeFileSync(join(dir, "test/sub.test.js"), 'import {test} from "node:test";\nimport assert from "node:assert";\nimport {sub} from "../src/sub.js";\ntest("s", () => assert.equal(sub(1, 1), 2));\n');
+    execFileSync("git", ["add", "-A"], { cwd: dir });
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "add sub"], { cwd: dir });
+    writeFileSync(join(dir, "src/sub.js"), "export const sub = (a, b) => a - b;\n");
+    writeFileSync(join(dir, "test/sub.test.js"), 'import {test} from "node:test";\nimport assert from "node:assert";\nimport {sub} from "../src/sub.js";\ntest("s", () => assert.equal(sub(3, 1), 2));\n');
+    execFileSync("git", ["add", "-A"], { cwd: dir });
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "fix: sub adds instead of subtracting"], { cwd: dir });
+
+    unfix(dir, ["mine"]);
+    assert.match(unfix(dir, ["validate"]), /2 of 2 usable/);
+    const key = Object.keys(process.env).find((k) => k.toUpperCase() === "PATH") ?? "PATH";
+    const env = { [key]: a.bin + delimiter + process.env[key], FAKE_CLAUDE: "expired" };
+
+    let failed: any;
+    try {
+      unfix(dir, ["run", "--agent", "claude-code", "--parallel", "1", "--label", "nologin"], env);
+    } catch (e) {
+      failed = e;
+    }
+    assert.ok(failed, "run should exit non-zero");
+    assert.match(String(failed.stderr), /login expired/);
+
+    const rs = results(dir, "nologin");
+    assert.ok(rs.length >= 1 && rs.every((r: any) => r.agentFailed && !r.solved));
+    assert.match(unfix(dir, ["report", "nologin"]), /agent errors/);
   } finally {
     rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
     rmSync(a.dir, { recursive: true, force: true, maxRetries: 5 });

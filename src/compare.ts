@@ -12,7 +12,8 @@ export interface Summary {
 }
 
 export function summarize(r: RunFile, ids?: Set<string>): Summary {
-  const rs = ids ? r.results.filter((x) => ids.has(x.id)) : r.results;
+  const attempted = r.results.filter((x) => !x.agentFailed);
+  const rs = ids ? attempted.filter((x) => ids.has(x.id)) : attempted;
   const solved = rs.filter((x) => x.solved).length;
   const costs = rs.map((x) => x.costUsd).filter((x): x is number => x != null);
   return {
@@ -22,7 +23,7 @@ export function summarize(r: RunFile, ids?: Set<string>): Summary {
     medianSeconds: median(rs.map((x) => x.seconds)),
     medianCost: median(costs),
     totalCost: costs.length ? costs.reduce((a, b) => a + b, 0) : undefined,
-    errors: rs.filter((x) => x.error).length,
+    errors: r.results.length - attempted.length,
   };
 }
 
@@ -55,11 +56,12 @@ export function report(r: RunFile) {
       ["median time", secs(s.medianSeconds)],
       ["median cost", usd(s.medianCost)],
       ["total cost", usd(s.totalCost)],
+      ...(s.errors ? [["agent errors", c.yellow(`${s.errors} (not counted)`)]] : []),
     ]),
     "",
   ];
   for (const x of [...r.results].sort((a, b) => a.id.localeCompare(b.id))) {
-    const mark = x.solved ? c.green("✓") : c.red("✗");
+    const mark = x.agentFailed ? c.yellow("!") : x.solved ? c.green("✓") : c.red("✗");
     lines.push(`  ${mark} ${x.id}${x.error ? c.dim(`  (${x.error})`) : ""}`);
   }
   return lines.join("\n") + "\n";
@@ -67,7 +69,9 @@ export function report(r: RunFile) {
 
 export function compare(a: RunFile, b: RunFile) {
   // Only count tasks both runs attempted, otherwise the numbers lie.
-  const ids = new Set(a.results.map((x) => x.id).filter((id) => b.results.some((y) => y.id === id)));
+  const ok = (r: RunFile) => new Set(r.results.filter((x) => !x.agentFailed).map((x) => x.id));
+  const okB = ok(b);
+  const ids = new Set([...ok(a)].filter((id) => okB.has(id)));
   const sa = summarize(a, ids);
   const sb = summarize(b, ids);
   const solvedA = new Set(a.results.filter((x) => x.solved && ids.has(x.id)).map((x) => x.id));
@@ -96,8 +100,9 @@ export function compare(a: RunFile, b: RunFile) {
   if (gained.length) text += `  ${c.green("newly solved")}  ${gained.join("  ")}\n`;
   if (lost.length) text += `  ${c.red("newly failed")}  ${lost.join("  ")}\n`;
   if (!gained.length && !lost.length) text += c.dim("  same tasks solved by both\n");
+  if (!ids.size) text = `\n  ${c.yellow("nothing to compare:")} no task was attempted by both runs. Check \`unfix report\` for agent errors.\n`;
   const skipped = a.results.length + b.results.length - 2 * ids.size;
-  if (skipped) text += c.dim(`  (${skipped} task results ignored because only one run has them)\n`);
+  if (skipped && ids.size) text += c.dim(`  (${skipped} task results left out: the agent didn't run, or only one run has them)\n`);
 
   return { text, deltaPP, gained, lost, a: sa, b: sb };
 }
