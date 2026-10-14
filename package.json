@@ -1,6 +1,6 @@
 {
   "name": "unfix-ai",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Un-fix bugs you already fixed, then see which AI coding agent fixes them again. A private benchmark built from your own git history.",
   "type": "module",
   "bin": {
@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node --test dist/test/*.test.js",
+    "test": "tsc && node --test dist/test/unit.test.js dist/test/e2e.test.js",
     "prepublishOnly": "npm test"
   },
   "engines": {

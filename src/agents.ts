@@ -1,4 +1,4 @@
-import { shellQuote, UserError } from "./util.js";
+import { shellQuote as q, UserError } from "./util.js";
 
 export interface AgentSpec {
   agent: string;
@@ -7,7 +7,10 @@ export interface AgentSpec {
 }
 
 export interface AgentInvocation {
-  command: string | string[];
+  command: string;
+  // The prompt is fed on stdin or through a file, never as an argument:
+  // cmd.exe can't carry a multi-line argument, and sh would need escaping anyway.
+  input?: string;
   env: Record<string, string>;
 }
 
@@ -23,30 +26,32 @@ ${problem}
 Change the code so the issue is fixed. Don't edit or add tests; they get replaced before grading. Don't ask questions, there is no one to answer them.`;
 }
 
-export function invocation(spec: AgentSpec, problem: string, problemFile: string): AgentInvocation {
-  const p = prompt(problem);
+export function invocation(spec: AgentSpec, problem: string, problemFile: string, promptFile: string): AgentInvocation {
   const m = spec.model;
-  const env = { UNFIX_PROBLEM_FILE: problemFile, UNFIX_MODEL: m ?? "" };
+  const env = { UNFIX_PROBLEM_FILE: problemFile, UNFIX_PROMPT_FILE: promptFile, UNFIX_MODEL: m ?? "" };
+  const model = (flag: string) => (m ? ` ${flag} ${q(m)}` : "");
+  const p = prompt(problem);
 
   switch (spec.agent) {
     case "claude-code":
-      return {
-        command: ["claude", "-p", p, "--output-format", "json", "--dangerously-skip-permissions", ...(m ? ["--model", m] : [])],
-        env,
-      };
+      return { command: `claude -p --output-format json --dangerously-skip-permissions${model("--model")}`, input: p, env };
     case "codex":
-      return { command: ["codex", "exec", "--full-auto", ...(m ? ["--model", m] : []), p], env };
+      return { command: `codex exec --full-auto${model("--model")} -`, input: p, env };
     case "aider":
       return {
-        command: ["aider", "--yes-always", "--no-check-update", "--no-show-model-warnings", ...(m ? ["--model", m] : []), "--message", p],
+        command: `aider --yes-always --no-check-update --no-show-model-warnings${model("--model")} --message-file ${q(promptFile)}`,
         env,
       };
     case "opencode":
-      return { command: ["opencode", "run", ...(m ? ["--model", m] : []), p], env };
+      // No stdin or file option, so it gets a one-line pointer to the prompt file.
+      return { command: `opencode run${model("--model")} ${q(`Read ${promptFile} and do what it says.`)}`, env };
     case "cmd":
-      if (!spec.cmd) throw new UserError('--agent cmd needs --cmd, e.g. --cmd "./my-agent.sh {problem_file}"');
+      if (!spec.cmd) throw new UserError('--agent cmd needs --cmd, e.g. --cmd "node my-agent.js {problem_file}"');
       return {
-        command: spec.cmd.replaceAll("{problem_file}", shellQuote(problemFile)).replaceAll("{model}", shellQuote(m ?? "")),
+        command: spec.cmd
+          .replaceAll("{problem_file}", q(problemFile))
+          .replaceAll("{prompt_file}", q(promptFile))
+          .replaceAll("{model}", q(m ?? "")),
         env,
       };
     default:

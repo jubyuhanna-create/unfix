@@ -66,7 +66,7 @@ git history ─► mine ─► validate ─► .unfix/tasks/*.json
 
 ## Quick start
 
-Requires Node 20+, git, and macOS, Linux or WSL.
+Works on Windows, macOS and Linux. Requires Node 20+ and git.
 
 ```bash
 npm i -g unfix-ai       # or without installing: npx unfix-ai <command>
@@ -115,7 +115,7 @@ unfix compare   <a> <b> [--fail-if-drop 5] [--json]
 | `codex` | `codex exec --full-auto …` |
 | `aider` | `aider --yes-always --message …` |
 | `opencode` | `opencode run …` |
-| `cmd` | anything. `{problem_file}` and `{model}` are filled in, and `$UNFIX_PROBLEM_FILE` is set |
+| `cmd` | anything. `{problem_file}`, `{prompt_file}` and `{model}` are filled in, and `$UNFIX_PROBLEM_FILE` / `$UNFIX_PROMPT_FILE` are set |
 
 Agents run with full permissions inside a throwaway copy of your code, so run `unfix` on a machine or container you're fine with an agent working on.
 

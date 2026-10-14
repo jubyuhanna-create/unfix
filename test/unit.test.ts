@@ -27,7 +27,15 @@ test("ignores lockfiles and docs", () => {
 test("test command fills in files and dirs", () => {
   assert.equal(testCommand({ test: "npx vitest run {files}" }, ["src/a.test.ts", "tests/fixtures/x.json"]), "npx vitest run src/a.test.ts");
   assert.equal(testCommand({ test: "go test {dirs}" }, ["pkg/http/a_test.go", "pkg/http/b_test.go"]), "go test ./pkg/http");
-  assert.equal(testCommand({ test: "pytest {files}" }, ["tests/it's.py"]), `pytest 'tests/it'\\''s.py'`);
+  assert.equal(testCommand({ test: "pytest {files}" }, ["tests/my test.py"]), `pytest ${shellQuote("tests/my test.py")}`);
+});
+
+test("quoting for sh and for cmd.exe", () => {
+  assert.equal(shellQuote("plain/path.js", false), "plain/path.js");
+  assert.equal(shellQuote("it's here", false), `'it'\\''s here'`);
+  assert.equal(shellQuote("C:\\Program Files\\x", true), `"C:\\Program Files\\x"`);
+  assert.equal(shellQuote('say "hi"', true), `"say \\"hi\\""`);
+  assert.equal(shellQuote("ends in slash\\", true), `"ends in slash\\\\"`);
 });
 
 test("commit messages lose trailers and PR numbers", () => {
@@ -60,12 +68,16 @@ test("candidates need both code and tests", () => {
   assert.equal(candidates([commit("add feature", [["src/b.ts", 3], ["src/b.test.ts", 5]])], { ...opts, anyMessage: true }).length, 1);
 });
 
-test("agent invocations", () => {
-  const cc = invocation({ agent: "claude-code", model: "opus" }, "bug", "/p.md").command as string[];
-  assert.equal(cc[0], "claude");
-  assert.deepEqual(cc.slice(-2), ["--model", "opus"]);
-  assert.equal(invocation({ agent: "cmd", cmd: "./a.sh {problem_file}" }, "bug", "/tmp/my p.md").command, "./a.sh '/tmp/my p.md'");
-  assert.throws(() => invocation({ agent: "nope" }, "", ""));
+test("agent invocations keep the prompt off the command line", () => {
+  const cc = invocation({ agent: "claude-code", model: "opus" }, "line one\nline two", "/p.md", "/q.md");
+  assert.match(cc.command, /^claude -p .*--model opus$/);
+  assert.ok(!cc.command.includes("line one"));
+  assert.match(cc.input!, /line one\nline two/);
+  assert.match(invocation({ agent: "codex" }, "bug", "/p.md", "/q.md").command, / -$/);
+  assert.match(invocation({ agent: "aider" }, "bug", "/p.md", "/q.md").command, /--message-file \/q\.md$/);
+  const c = invocation({ agent: "cmd", cmd: "node a.js {problem_file}" }, "bug", "/tmp/my p.md", "/q.md");
+  assert.equal(c.command, `node a.js ${shellQuote("/tmp/my p.md")}`);
+  assert.throws(() => invocation({ agent: "nope" }, "", "", ""));
 });
 
 test("small helpers", () => {
@@ -74,5 +86,4 @@ test("small helpers", () => {
   assert.equal(slug("Fix: Crash on   empty input!"), "fix-crash-on-empty-input");
   assert.equal(median([3, 1, 2]), 2);
   assert.equal(median([]), undefined);
-  assert.equal(shellQuote("a b"), "'a b'");
 });

@@ -35,7 +35,7 @@ ${c.bold("Typical loop")}
   unfix run --agent claude-code --label after
   unfix compare before after
 
-Docs: https://github.com/El7ajb/unfix
+Docs: https://github.com/jubyuhanna-create/unfix
 `;
 
 function parseTime(s: string | undefined, fallbackMs: number) {

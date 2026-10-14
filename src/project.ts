@@ -93,7 +93,7 @@ export function loadConfig(root: string): Config {
 
 export function testCommand(cfg: Config, testFiles: string[]) {
   const files = testFiles.filter(isTestCode);
-  const list = (files.length ? files : testFiles).map(shellQuote).join(" ");
+  const list = (files.length ? files : testFiles).map((s) => shellQuote(s)).join(" ");
   const dirs = [...new Set(testFiles.map((f) => "./" + dirname(f)))].map((d) => (d === "./." ? "." : d));
-  return cfg.test.replaceAll("{files}", list).replaceAll("{dirs}", dirs.map(shellQuote).join(" "));
+  return cfg.test.replaceAll("{files}", list).replaceAll("{dirs}", dirs.map((s) => shellQuote(s)).join(" "));
 }

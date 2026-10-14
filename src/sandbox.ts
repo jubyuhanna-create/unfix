@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,12 +23,21 @@ export class Sandbox {
   }
 
   create(prepare?: (dir: string) => void) {
-    const tar = gitBuf(this.repo, ["archive", "--format=tar", this.task.base]);
-    execFileSync("tar", ["-x", "-C", this.dir], { input: tar, maxBuffer: 1 << 30 });
+    // Check the base commit out into our folder through a throwaway index, so the
+    // user's own index and working tree are never touched. Line endings stay
+    // exactly as committed (no autocrlf), otherwise patches won't apply on Windows.
+    const index = join(this.dir, ".unfix-index");
+    const env = { GIT_INDEX_FILE: index };
+    git(this.repo, ["-c", "core.autocrlf=false", "read-tree", this.task.base], undefined, env);
+    git(this.repo, ["-c", "core.autocrlf=false", "-c", "core.eol=lf", "checkout-index", "-a", "-f", `--prefix=${this.dir.replace(/\\/g, "/")}/`], undefined, env);
+    rmSync(index, { force: true });
+
     // If someone committed .unfix/, it holds the answers. Never ship it to the agent.
     rmSync(join(this.dir, ".unfix"), { recursive: true, force: true });
     prepare?.(this.dir);
     this.git(["init", "-q"]);
+    this.git(["config", "core.autocrlf", "false"]);
+    this.git(["config", "core.safecrlf", "false"]);
     this.git(["add", "-A"]);
     this.git([...ID, "commit", "-q", "--no-verify", "-m", "base"]);
     this.git(["tag", BASE_TAG]);
@@ -76,6 +84,9 @@ export class Sandbox {
   }
 
   dispose() {
-    rmSync(this.dir, { recursive: true, force: true });
+    // Windows keeps files locked for a moment after a process exits.
+    try {
+      rmSync(this.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
+    } catch {}
   }
 }

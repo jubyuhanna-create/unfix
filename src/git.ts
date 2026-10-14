@@ -1,18 +1,20 @@
 import { execFileSync } from "node:child_process";
 import { UserError } from "./util.js";
 
-export function git(cwd: string, args: string[], input?: string | Buffer): string {
+export function git(cwd: string, args: string[], input?: string | Buffer, env?: Record<string, string>): string {
   return execFileSync("git", args, {
     cwd,
     input,
+    env: env ? { ...process.env, ...env } : undefined,
     encoding: "utf8",
     maxBuffer: 256 * 1024 * 1024,
     stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
   });
 }
 
 export function gitBuf(cwd: string, args: string[]): Buffer {
-  return execFileSync("git", args, { cwd, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  return execFileSync("git", args, { cwd, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
 }
 
 export function repoRoot(cwd: string) {

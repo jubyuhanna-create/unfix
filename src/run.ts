@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { invocation, parseCost, type AgentSpec } from "./agents.js";
+import { invocation, parseCost, prompt, type AgentSpec } from "./agents.js";
 import { git } from "./git.js";
 import type { Config } from "./project.js";
 import { BASE_TAG, Sandbox } from "./sandbox.js";
@@ -82,14 +82,17 @@ async function runTask(root: string, task: Task, cfg: Config, opts: RunOptions):
     }
 
     const problemFile = join(logDir, `${task.id}.problem.md`);
+    const promptFile = join(logDir, `${task.id}.prompt.md`);
     writeFileSync(problemFile, task.problem + "\n");
-    const inv = invocation(opts, task.problem, problemFile);
-    const agent = await exec(inv.command, { cwd: box.dir, timeoutMs: opts.agentTimeoutMs, env: inv.env });
+    writeFileSync(promptFile, prompt(task.problem) + "\n");
+    const inv = invocation(opts, task.problem, problemFile, promptFile);
+    log.push(`$ ${inv.command}`);
+    const agent = await exec(inv.command, { cwd: box.dir, timeoutMs: opts.agentTimeoutMs, env: inv.env, input: inv.input });
     log.push(`--- agent (exit ${agent.code}${agent.timedOut ? ", timed out" : ""}) ---\n${agent.out}`);
 
     const touched = changedFiles(box);
     log.push(`--- files changed ---\n${touched.join("\n") || "(none)"}`);
-    log.push(`--- diff ---\n${box.git(["diff", "--cached", BASE_TAG, "--", ...touched.filter((f) => !task.testFiles.includes(f))])}`);
+    log.push(`--- diff ---\n${box.git(["diff", "--cached", BASE_TAG])}`);
 
     box.resetTestsAndApplyFix();
     const tests = await box.runTests(opts.testTimeoutMs);

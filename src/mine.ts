@@ -14,7 +14,7 @@ export interface MineOptions {
 }
 
 const FIXY = /\b(fix(e[sd])?|bug|crash(es|ed)?|regress(ion)?|broken|wrong|incorrect|error|issue|handle|prevent|avoid)\b/i;
-const SKIP = /^(revert|merge|bump|release|chore\(deps\)|build\(deps\)|v?\d+\.\d+\.\d+$)/i;
+const SKIP = /^(revert|merge|docs?[(:]|style[(:]|ci[(:]|bump|release|chore\(deps\)|build\(deps\)|v?\d+\.\d+\.\d+$)/i;
 const TRAILER = /^(signed-off-by|co-authored-by|reviewed-by|change-id|cherry picked from|claude-session):.*$/gim;
 
 export function cleanMessage(subject: string, body: string) {
